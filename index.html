@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Obfuscate + Compile · Endpoint Sendiri</title>
+<style>
+  body {
+    font-family: system-ui, sans-serif;
+    background: #0b0d10;
+    color: #eef2f5;
+    padding: 24px;
+    max-width: 800px;
+    margin: auto;
+  }
+  h1 { font-size: 1.3rem; margin-bottom: 6px; }
+  p.sub { color: #9aa6b5; font-size: 0.85rem; margin-bottom: 20px; }
+  textarea {
+    width: 100%; height: 200px;
+    background: #0e1219; color: #e2e8f0;
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 12px; padding: 14px;
+    font-family: monospace; font-size: 0.85rem;
+    resize: vertical;
+  }
+  select, button {
+    padding: 12px 20px; border-radius: 40px;
+    border: 1px solid rgba(255,255,255,0.1);
+    background: #0e1219; color: #fff;
+    font-size: 0.9rem; font-weight: 600;
+    cursor: pointer; margin-right: 8px;
+  }
+  button.primary { background: #1e90ff; border-color: #1e90ff; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .status {
+    margin-top: 16px; padding: 12px 18px;
+    background: rgba(255,255,255,0.03);
+    border-radius: 12px; font-size: 0.9rem;
+  }
+  .status.ok  { color: #6fcf97; }
+  .status.err { color: #f87171; }
+  .status.load { color: #fbbf24; }
+  pre {
+    margin-top: 16px; padding: 14px;
+    background: #0e1219; border-radius: 12px;
+    font-size: 0.8rem; max-height: 200px;
+    overflow: auto; color: #7c8ca0;
+    border: 1px solid rgba(255,255,255,0.05);
+  }
+</style>
+</head>
+<body>
+
+<h1>Obfuscate + Compile</h1>
+<p class="sub">Endpoint sendiri · proxy ke ar19-apii.vercel.app</p>
+
+<textarea id="input" placeholder="-- Tempel kode Lua..."></textarea>
+
+<div style="margin-top:12px">
+  <select id="mode">
+    <option value="wd">Obfuscate only</option>
+    <option value="wd64">Obfuscate + Compile 64-bit</option>
+    <option value="wd32">Obfuscate + Compile 32-bit</option>
+    <option value="c64">Compile 64-bit only</option>
+    <option value="c32">Compile 32-bit only</option>
+  </select>
+  <button class="primary" id="run">Jalankan</button>
+</div>
+
+<div class="status" id="status">Status: siap</div>
+<pre id="log"></pre>
+
+<script>
+// ---------- Endpoint sendiri (proxy) ----------
+const API = {
+  obfuscate:    "/api/obfuscate",
+  compile64:    "/api/compile-64bit",
+  compile32:    "/api/compile-32bit"
+};
+
+const $in     = document.getElementById("input");
+const $mode   = document.getElementById("mode");
+const $run    = document.getElementById("run");
+const $status = document.getElementById("status");
+const $log    = document.getElementById("log");
+
+function setStatus(msg, type = "") {
+  $status.textContent = "Status: " + msg;
+  $status.className = "status " + type;
+}
+function log(msg) {
+  const t = new Date().toLocaleTimeString("id-ID");
+  $log.textContent += `[${t}] ${msg}\n`;
+  $log.scrollTop = $log.scrollHeight;
+}
+function fmtBytes(n) {
+  if (n < 1024) return n + " B";
+  if (n < 1024*1024) return (n/1024).toFixed(1) + " KB";
+  return (n/1024/1024).toFixed(2) + " MB";
+}
+function downloadBlob(blob, name) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = name; a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ---------- API callers (ke endpoint sendiri) ----------
+async function apiObfuscate(script) {
+  const res = await fetch(API.obfuscate, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ script })
+  });
+  const data = await res.json();
+  if (!res.ok || !data.success) {
+    throw new Error(data.error || data.detail || "Obfuscate gagal");
+  }
+  return data.obfuscated;
+}
+
+async function apiCompile(script, bits) {
+  const url = bits === 64 ? API.compile64 : API.compile32;
+  const blob = new Blob([script], { type: "text/plain" });
+  const fd = new FormData();
+  fd.append("file", blob, "input.lua");
+
+  const res = await fetch(url, { method: "POST", body: fd });
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error(`HTTP ${res.status}: ${txt.slice(0, 200)}`);
+  }
+  return new Uint8Array(await res.arrayBuffer());
+}
+
+// ---------- Main runner ----------
+async function run() {
+  const code = $in.value.trim();
+  if (!code) { setStatus("Input kosong", "err"); return; }
+
+  const mode = $mode.value;
+  $run.disabled = true;
+  $log.textContent = "";
+  setStatus("Memproses...", "load");
+
+  try {
+    let current = code;
+    let obf = false;
+
+    if (["wd","wd64","wd32"].includes(mode)) {
+      log("→ Obfuscate...");
+      current = await apiObfuscate(code);
+      obf = true;
+      log(`✓ Obfuscate OK (${fmtBytes(new Blob([current]).size)})`);
+    }
+
+    if (mode === "c64" || mode === "wd64") {
+      log("→ Compile 64-bit...");
+      const bytes = await apiCompile(current, 64);
+      log(`✓ Compile 64-bit OK (${fmtBytes(bytes.length)})`);
+      const name = obf ? "output-obfuscate-64bit.luac" : "output-64bit.luac";
+      downloadBlob(new Blob([bytes], {type:"application/octet-stream"}), name);
+      log(`→ Download: ${name}`);
+      setStatus("Selesai: " + name, "ok");
+
+    } else if (mode === "c32" || mode === "wd32") {
+      log("→ Compile 32-bit...");
+      const bytes = await apiCompile(current, 32);
+      log(`✓ Compile 32-bit OK (${fmtBytes(bytes.length)})`);
+      const name = obf ? "output-obfuscate-32bit.luac" : "output-32bit.luac";
+      downloadBlob(new Blob([bytes], {type:"application/octet-stream"}), name);
+      log(`→ Download: ${name}`);
+      setStatus("Selesai: " + name, "ok");
+
+    } else {
+      const name = "output-obfuscate.lua";
+      downloadBlob(new Blob([current], {type:"text/plain"}), name);
+      log(`→ Download: ${name}`);
+      setStatus("Selesai: " + name, "ok");
+    }
+  } catch (e) {
+    log("✗ Error: " + e.message);
+    setStatus("Gagal: " + e.message, "err");
+  } finally {
+    $run.disabled = false;
+  }
+}
+
+$run.addEventListener("click", run);
+</script>
+</body>
+</html>
