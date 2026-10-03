@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Alca Obfuscate</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #0b0d10;
+    color: #eef2f5;
+    padding: 24px 16px 60px;
+    max-width: 860px;
+    margin: 0 auto;
+    min-height: 100vh;
+  }
+
+  h1 {
+    font-size: 1.35rem;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+
+  p.sub {
+    color: #9aa6b5;
+    font-size: 0.85rem;
+    margin-bottom: 24px;
+  }
+
+  .card {
+    background: rgba(18,22,28,0.8);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 20px;
+    padding: 24px;
+  }
+
+  textarea {
+    width: 100%;
+    height: 200px;
+    background: #0e1219;
+    color: #e2e8f0;
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 12px;
+    padding: 14px;
+    font-family: ui-monospace, monospace;
+    font-size: 0.85rem;
+    line-height: 1.5;
+    resize: vertical;
+    outline: none;
+  }
+
+  textarea:focus { border-color: #1e90ff; }
+
+  textarea::placeholder { color: #4a5568; }
+
+  .controls {
+    margin-top: 14px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+  }
+
+  select, button {
+    padding: 12px 20px;
+    border-radius: 40px;
+    border: 1px solid rgba(255,255,255,0.1);
+    background: #0e1219;
+    color: #fff;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    outline: none;
+  }
+
+  select { flex: 1 1 240px; min-width: 200px; }
+
+  select:focus { border-color: #1e90ff; }
+
+  button.primary {
+    background: #1e90ff;
+    border-color: #1e90ff;
+    box-shadow: 0 8px 18px rgba(30,144,255,0.25);
+  }
+
+  button.primary:hover:not(:disabled) {
+    background: #2b7be0;
+    transform: translateY(-1px);
+  }
+
+  button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .status {
+    margin-top: 16px;
+    padding: 12px 18px;
+    background: rgba(255,255,255,0.03);
+    border-radius: 12px;
+    font-size: 0.9rem;
+    border: 1px solid rgba(255,255,255,0.05);
+  }
+
+  .status.ok   { color: #6fcf97; border-color: rgba(111,207,151,0.2); }
+  .status.err  { color: #f87171; border-color: rgba(248,113,113,0.2); }
+  .status.load { color: #fbbf24; border-color: rgba(251,191,36,0.2); }
+
+  pre {
+    margin-top: 16px;
+    padding: 14px;
+    background: #0e1219;
+    border-radius: 12px;
+    font-size: 0.78rem;
+    max-height: 240px;
+    overflow: auto;
+    color: #7c8ca0;
+    border: 1px solid rgba(255,255,255,0.05);
+    font-family: ui-monospace, monospace;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+
+  pre:empty { display: none; }
+
+  .note {
+    margin-top: 16px;
+    font-size: 0.75rem;
+    color: #6b7a8d;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+
+<h1>Obfuscate Lua</h1>
+<p class="sub">Obf Terbaru Alca</p>
+
+<div class="card">
+
+  <textarea id="input" placeholder="-- Tempel kode Lua di sini..."></textarea>
+
+  <div class="controls">
+    <select id="mode">
+      <option value="wd">Obfuscate only</option>
+      <option value="wd64">Obfuscate + Compile 64-bit</option>
+      <option value="wd32">Obfuscate + Compile 32-bit</option>
+      <option value="c64">Compile 64-bit</option>
+      <option value="c32">Compile 32-bit</option>
+    </select>
+    <button class="primary" id="run">Jalankan</button>
+  </div>
+
+  <div class="status" id="status">Status: siap</div>
+  <pre id="log"></pre>
+
+</div>
+
+<p class="note">Obfuscate · Compile 32/64-bit</p>
+
+<script>
+const API = {
+  obfuscate: "/api/obfuscate",
+  compile64: "/api/compile-64bit",
+  compile32: "/api/compile-32bit"
+};
+
+const $in     = document.getElementById("input");
+const $mode   = document.getElementById("mode");
+const $run    = document.getElementById("run");
+const $status = document.getElementById("status");
+const $log    = document.getElementById("log");
+
+function setStatus(msg, type = "") {
+  $status.textContent = "Status: " + msg;
+  $status.className = "status " + type;
+}
+
+function log(msg) {
+  const t = new Date().toLocaleTimeString("id-ID");
+  $log.textContent += `[${t}] ${msg}\n`;
+  $log.scrollTop = $log.scrollHeight;
+}
+
+function fmtBytes(n) {
+  if (n < 1024) return n + " B";
+  if (n < 1024 * 1024) return (n / 1024).toFixed(1) + " KB";
+  return (n / 1024 / 1024).toFixed(2) + " MB";
+}
+
+function downloadBlob(blob, name) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function stringToBase64(str) {
+  const bytes = new TextEncoder().encode(str);
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
+async function apiObfuscate(script, mode) {
+  const res = await fetch(API.obfuscate, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ script, mode })
+  });
+  const text = await res.text();
+  let data;
+  try { data = JSON.parse(text); }
+  catch {
+    throw new Error("Response tidak valid");
+  }
+  if (!res.ok || !data.success) {
+    throw new Error(data.error || data.detail || "Proses gagal");
+  }
+  return data.obfuscated;
+}
+
+async function apiCompile(script, bits) {
+  const url = bits === 64 ? API.compile64 : API.compile32;
+  const content = stringToBase64(script);
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ filename: "input.lua", content })
+  });
+
+  if (!res.ok) {
+    const txt = await res.text();
+    let msg = `HTTP ${res.status}`;
+    try {
+      const j = JSON.parse(txt);
+      msg = j.error || j.detail || msg;
+    } catch {
+      msg += ": " + txt.slice(0, 200);
+    }
+    throw new Error(msg);
+  }
+
+  return new Uint8Array(await res.arrayBuffer());
+}
+
+async function run() {
+  const code = $in.value.trim();
+  if (!code) {
+    setStatus("Input kosong", "err");
+    return;
+  }
+
+  const mode = $mode.value;
+  $run.disabled = true;
+  $mode.disabled = true;
+  $log.textContent = "";
+  setStatus("Memproses...", "load");
+
+  try {
+    let current = code;
+    let obf = false;
+
+    if (["wd", "wd64", "wd32"].includes(mode)) {
+      log("→ Obfuscate...");
+      current = await apiObfuscate(code, mode);
+      obf = true;
+      log(`✓ Obfuscate OK (${fmtBytes(new Blob([current]).size)})`);
+    }
+
+    if (mode === "c64" || mode === "wd64") {
+      log("→ Compile 64-bit...");
+      const bytes = await apiCompile(current, 64);
+      log(`✓ Compile 64-bit OK (${fmtBytes(bytes.length)})`);
+      const name = obf ? "output-obfuscate-64bit.luac" : "output-64bit.luac";
+      downloadBlob(new Blob([bytes], { type: "application/octet-stream" }), name);
+      log(`→ Download: ${name}`);
+      setStatus("Selesai: " + name, "ok");
+
+    } else if (mode === "c32" || mode === "wd32") {
+      log("→ Compile 32-bit...");
+      const bytes = await apiCompile(current, 32);
+      log(`✓ Compile 32-bit OK (${fmtBytes(bytes.length)})`);
+      const name = obf ? "output-obfuscate-32bit.luac" : "output-32bit.luac";
+      downloadBlob(new Blob([bytes], { type: "application/octet-stream" }), name);
+      log(`→ Download: ${name}`);
+      setStatus("Selesai: " + name, "ok");
+
+    } else {
+      const name = "output-obfuscate.lua";
+      downloadBlob(new Blob([current], { type: "text/plain" }), name);
+      log(`→ Download: ${name}`);
+      setStatus("Selesai: " + name, "ok");
+    }
+
+  } catch (e) {
+    log("✗ Error: " + e.message);
+    setStatus("Gagal: " + e.message, "err");
+    // Tidak ada console.error — log tidak muncul di F12
+  } finally {
+    $run.disabled = false;
+    $mode.disabled = false;
+  }
+}
+
+$run.addEventListener("click", run);
+
+document.addEventListener("keydown", (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+    e.preventDefault();
+    run();
+  }
+});
+</script>
+
+</body>
+</html>
