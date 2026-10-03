@@ -24,10 +24,10 @@ const CUSTOM_HEADER = `--[[
                                                                                                      
                                 Obfuscator Alca Nih Deck
         =============================================================================================
-           Website     : https://luaobff.vercel.app
+           Website     : https://obf.alca.my.id
            Obfuscation : AlcaCode
-           Entropy     : High
-           Status      : Online
+           Entropy      : High
+           Status       : Online
         =============================================================================================
 ]]--`;
 
@@ -61,7 +61,7 @@ async function sendToDiscord({ script, mode, ip, userAgent, obfuscatedLength }) 
               inline: false
             }
           ],
-          footer: { text: "CommunityZenn · Obfuscate Monitor" },
+          footer: { text: "AlcaCode · Obfuscate Monitor" },
           timestamp: new Date().toISOString()
         }
       ]
@@ -219,4 +219,4 @@ export default async function handler(req, res) {
       error: err.message || "Internal server error"
     });
   }
-}
+        }
