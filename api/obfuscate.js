@@ -22,13 +22,12 @@ const CUSTOM_HEADER = `--[[
       | | | |_| || |/ / / / / /           \\ \\_/ / |_/ / |   | |_| /\\__/ / \\__/\\| | | || | \\ \\_/ / |\\ \\ 
       \\_| |_/\\___/___/ /___/___|           \\___/\\____/\\_|    \\___/\\____/ \\____/\\_| |_/\\_/  \\___/\\_| \\_|
                                                                                                      
-                                Obfuscator Anti-AI(LUA / PWN / HTML)
+                                Obfuscator Alca Nih Deck
         =============================================================================================
-        bª Website     : https://obfuscator.hdz.my.id
-        bª Obfuscation : Runtime polymorphic
-        bª Anti-tamper : Ci verification
-        bª Entropy     : High
-        bª Status      : bÏ Online
+           Website     : https://luaobff.vercel.app
+           Obfuscation : AlcaCode
+           Entropy     : High
+           Status      : Online
         =============================================================================================
 ]]--`;
 
